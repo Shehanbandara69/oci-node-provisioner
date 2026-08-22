@@ -1,46 +1,54 @@
 import oci
 import os
 import time
+import sys
 
-# Setup configuration from GitHub Secrets (Namas match karala thiyenne)
+# Setup configuration from OS Environment Variables
+# OS environ.get eken thamai GitHub Actions secrets ganna lesima widiha
 config = {
-    "user": os.getenv("OCI_USER_OCID"),
-    "key_content": os.getenv("OCI_KEY_FILE"),
-    "fingerprint": os.getenv("OCI_FINGERPRINT"),
-    "tenancy": os.getenv("OCI_TENANT_OCID"),
-    "region": os.getenv("OCI_REGION")
+    "user": os.environ.get("OCI_USER_OCID"),
+    "key_content": os.environ.get("OCI_KEY_FILE"),
+    "fingerprint": os.environ.get("OCI_FINGERPRINT"),
+    "tenancy": os.environ.get("OCI_TENANT_OCID"),
+    "region": os.environ.get("OCI_REGION")
 }
 
+# 1. SAFETY CHECK: Ensure keys are loaded correctly
+missing_keys = [k for k, v in config.items() if not v]
+if missing_keys:
+    print(f"CRITICAL ERROR: These secrets are missing or not passed to Python: {missing_keys}")
+    print("Please check your .github/workflows/oci_spawn.yml file's 'env:' section.")
+    sys.exit(1)
+
 try:
-    # Compute client and Identity client (to auto-fetch ADs)
     compute_client = oci.core.ComputeClient(config)
     identity_client = oci.identity.IdentityClient(config)
     print("OCI Authentication Successful. Initializing setup...")
 except Exception as e:
     print(f"Authentication Failed: {e}")
-    exit(1)
+    sys.exit(1)
 
 # Execution parameters
-compartment_id = os.getenv("OCI_TENANT_OCID")
-subnet_id = os.getenv("OCI_SUBNET_ID")
-image_id = os.getenv("OCI_IMAGE_ID")
-public_ssh_key = os.getenv("OCI_PUBLIC_SSH_KEY") 
+compartment_id = os.environ.get("OCI_TENANT_OCID")
+subnet_id = os.environ.get("OCI_SUBNET_ID")
+image_id = os.environ.get("OCI_IMAGE_ID")
+public_ssh_key = os.environ.get("OCI_PUBLIC_SSH_KEY") 
 
-# SAFETY CHECK: Verify the key actually loaded
-if not public_ssh_key or public_ssh_key.strip() == "":
-    print("CRITICAL ERROR: OCI_PUBLIC_SSH_KEY is empty or missing from your secrets!")
-    exit(1)
+# 2. SAFETY CHECK: Ensure instance parameters are loaded
+if not public_ssh_key or not subnet_id or not image_id:
+    print("CRITICAL ERROR: Instance configuration secrets (Subnet, Image, SSH Key) are missing.")
+    sys.exit(1)
 
-# AUTO-FETCH Availability Domains (Me kramayen hardcode karanna ona na)
+# AUTO-FETCH Availability Domains for your region
 try:
     ads_response = identity_client.list_availability_domains(compartment_id)
     ads = [ad.name for ad in ads_response.data]
     print(f"Found Availability Domains for {config['region']}: {ads}")
 except Exception as e:
     print(f"Failed to fetch Availability Domains: {e}")
-    exit(1)
+    sys.exit(1)
 
-total_attempts = 60 
+total_attempts = 100 
 
 for i in range(1, total_attempts + 1):
     current_ad = ads[(i - 1) % len(ads)]
@@ -75,7 +83,7 @@ for i in range(1, total_attempts + 1):
         response = compute_client.launch_instance(request)
         if response.status == 200:
             print("SUCCESS! Server creation initialized perfectly.")
-            exit(0)
+            sys.exit(0)
             
     except oci.exceptions.ServiceError as e:
         if "Out of host capacity" in str(e) or e.status == 500:
