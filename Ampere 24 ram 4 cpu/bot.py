@@ -4,7 +4,6 @@ import time
 import sys
 
 # Setup configuration from OS Environment Variables
-# OS environ.get eken thamai GitHub Actions secrets ganna lesima widiha
 config = {
     "user": os.environ.get("OCI_USER_OCID"),
     "key_content": os.environ.get("OCI_KEY_FILE"),
@@ -87,9 +86,11 @@ for i in range(1, total_attempts + 1):
             
     except oci.exceptions.ServiceError as e:
         if "Out of host capacity" in str(e) or e.status == 500:
-            print(f"-> Capacity Unavailable. Resting 60 seconds...")
+            print(f"-> Capacity Unavailable. Resting 120 seconds...")
+            time.sleep(120)  
+        elif e.status == 429: # 429 is Too Many Requests
+            print(f"-> API Error: Too many requests. Resting 180 seconds to avoid block...")
+            time.sleep(180)
         else:
             print(f"-> API Error: {e.message}")
-            
-    if i < total_attempts:
-        time.sleep(60)
+            time.sleep(180)
