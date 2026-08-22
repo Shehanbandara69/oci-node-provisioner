@@ -1,49 +1,54 @@
 import oci
 import os
 import time
-from dotenv import load_dotenv
 
-load_dotenv()
-
-# Setup configuration from environment variables
+# Setup configuration from GitHub Secrets (Namas match karala thiyenne)
 config = {
-    "user": os.getenv("OCI_USER_ID"),
-    "key_content": os.getenv("OCI_PRIVATE_KEY"),
+    "user": os.getenv("OCI_USER_OCID"),
+    "key_content": os.getenv("OCI_KEY_FILE"),
     "fingerprint": os.getenv("OCI_FINGERPRINT"),
-    "tenancy": os.getenv("OCI_TENANCY_ID"),
+    "tenancy": os.getenv("OCI_TENANT_OCID"),
     "region": os.getenv("OCI_REGION")
 }
 
 try:
+    # Compute client and Identity client (to auto-fetch ADs)
     compute_client = oci.core.ComputeClient(config)
-    print("OCI Authentication Successful. Initializing loop sequence...")
+    identity_client = oci.identity.IdentityClient(config)
+    print("OCI Authentication Successful. Initializing setup...")
 except Exception as e:
     print(f"Authentication Failed: {e}")
     exit(1)
 
 # Execution parameters
-compartment_id = os.getenv("OCI_TENANCY_ID")
+compartment_id = os.getenv("OCI_TENANT_OCID")
 subnet_id = os.getenv("OCI_SUBNET_ID")
 image_id = os.getenv("OCI_IMAGE_ID")
 public_ssh_key = os.getenv("OCI_PUBLIC_SSH_KEY") 
 
-# SAFETY CHECK: Verify the key actually loaded from GitHub Secrets
+# SAFETY CHECK: Verify the key actually loaded
 if not public_ssh_key or public_ssh_key.strip() == "":
     print("CRITICAL ERROR: OCI_PUBLIC_SSH_KEY is empty or missing from your secrets!")
     exit(1)
 
-# Availability Domains to cycle through
-ads = ["uufj:PHX-AD-1", "uufj:PHX-AD-2", "uufj:PHX-AD-3"]
+# AUTO-FETCH Availability Domains (Me kramayen hardcode karanna ona na)
+try:
+    ads_response = identity_client.list_availability_domains(compartment_id)
+    ads = [ad.name for ad in ads_response.data]
+    print(f"Found Availability Domains for {config['region']}: {ads}")
+except Exception as e:
+    print(f"Failed to fetch Availability Domains: {e}")
+    exit(1)
 
 total_attempts = 60 
 
 for i in range(1, total_attempts + 1):
     current_ad = ads[(i - 1) % len(ads)]
-    print(f"[Attempt {i}/{total_attempts}] Requesting instance in {current_ad}...")
+    print(f"[Attempt {i}/{total_attempts}] Requesting A1.Flex instance in {current_ad}...")
     
     try:
         request = oci.core.models.LaunchInstanceDetails(
-            display_name="FX-Backend-Server",
+            display_name="Ubuntu-ARM-Server",
             compartment_id=compartment_id,
             availability_domain=current_ad,
             shape="VM.Standard.A1.Flex",
@@ -60,7 +65,7 @@ for i in range(1, total_attempts + 1):
                 subnet_id=subnet_id,
                 assign_public_ip=True,
                 assign_private_dns_record=True,
-                display_name="forexalertsvnic"
+                display_name="arm-server-vnic"
             ),
             metadata={
                 "ssh_authorized_keys": str(public_ssh_key).strip()
@@ -69,7 +74,7 @@ for i in range(1, total_attempts + 1):
         
         response = compute_client.launch_instance(request)
         if response.status == 200:
-            print("SUCCESS! Authorized Server creation initialized perfectly.")
+            print("SUCCESS! Server creation initialized perfectly.")
             exit(0)
             
     except oci.exceptions.ServiceError as e:
