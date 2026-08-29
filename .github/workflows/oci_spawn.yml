@@ -1,30 +1,20 @@
-```yaml
 name: Continuous OCI A1 Provisioner
 
 on:
   schedule:
-    # Every 15 minutes, deliberately avoiding minute 0.
-    # If a provisioner is already running, concurrency prevents overlap.
     - cron: '7,22,37,52 * * * *'
-
-  # Manual start button
   workflow_dispatch:
 
-# Never allow two OCI provisioners to run at the same time.
 concurrency:
   group: oci-a1-instance-provisioner
   cancel-in-progress: false
 
-# Only permission checkout needs.
 permissions:
   contents: read
 
 jobs:
   attempt-build:
     runs-on: ubuntu-latest
-
-    # Python script is configured for max ~330 minutes.
-    # Leave some room before GitHub's runner limit.
     timeout-minutes: 350
 
     steps:
@@ -47,31 +37,24 @@ jobs:
         env:
           PYTHONUNBUFFERED: "1"
 
-          # OCI Authentication
           OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
           OCI_KEY_FILE: ${{ secrets.OCI_KEY_FILE }}
           OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
           OCI_TENANT_OCID: ${{ secrets.OCI_TENANT_OCID }}
           OCI_REGION: ${{ secrets.OCI_REGION }}
 
-          # OCI Instance Configuration
           OCI_SUBNET_ID: ${{ secrets.OCI_SUBNET_ID }}
           OCI_IMAGE_ID: ${{ secrets.OCI_IMAGE_ID }}
           OCI_PUBLIC_SSH_KEY: ${{ secrets.OCI_PUBLIC_SSH_KEY }}
 
-          # Provisioner Configuration
           OCI_INSTANCE_NAME: "Ubuntu-ARM-Server-2C"
 
-          # Primary target
           OCI_OCPUS: "2"
           OCI_MEMORY_GB: "12"
 
-          # After 60 minutes also try 1 OCPU / 6 GB
           ALLOW_SMALLER_FALLBACK: "true"
           FALLBACK_AFTER_MINUTES: "60"
 
-          # Run for max 5.5 hours
           MAX_RUNTIME_MINUTES: "330"
 
         run: python "Ampere 24 ram 4 cpu/bot.py"
-```
