@@ -1,12 +1,12 @@
-name: Continuous OCI A1 Provisioner
+name: Continuous OCI E2 Micro Provisioner
 
 on:
   schedule:
-    - cron: '7,22,37,52 * * * *'
+    - cron: '7 */6 * * *'
   workflow_dispatch:
 
 concurrency:
-  group: oci-a1-instance-provisioner
+  group: oci-e2-micro-provisioner
   cancel-in-progress: false
 
 permissions:
@@ -15,16 +15,16 @@ permissions:
 jobs:
   attempt-build:
     runs-on: ubuntu-latest
-    timeout-minutes: 350
+    timeout-minutes: 330
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Python 3.10
+      - name: Setup Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
           cache: 'pip'
           cache-dependency-path: requirements.txt
 
@@ -33,28 +33,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run OCI A1 Provisioner
+      - name: Try to provision E2.1.Micro
         env:
           PYTHONUNBUFFERED: "1"
-
           OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
           OCI_KEY_FILE: ${{ secrets.OCI_KEY_FILE }}
           OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
           OCI_TENANT_OCID: ${{ secrets.OCI_TENANT_OCID }}
           OCI_REGION: ${{ secrets.OCI_REGION }}
-
           OCI_SUBNET_ID: ${{ secrets.OCI_SUBNET_ID }}
-          OCI_IMAGE_ID: ${{ secrets.OCI_IMAGE_ID }}
           OCI_PUBLIC_SSH_KEY: ${{ secrets.OCI_PUBLIC_SSH_KEY }}
-
-          OCI_INSTANCE_NAME: "Ubuntu-ARM-Server-2C"
-
-          OCI_OCPUS: "2"
-          OCI_MEMORY_GB: "12"
-
-          ALLOW_SMALLER_FALLBACK: "true"
-          FALLBACK_AFTER_MINUTES: "60"
-
-          MAX_RUNTIME_MINUTES: "330"
-
-        run: python "Ampere 24 ram 4 cpu/bot.py"
+          OCI_COMPARTMENT_ID: ${{ secrets.OCI_COMPARTMENT_ID }}
+          OCI_INSTANCE_NAME: "Ubuntu-E2-Micro-2"
+          OCI_BOOT_VOLUME_GB: "50"
+          MAX_E2_MICROS: "2"
+          MAX_RUNTIME_MINUTES: "320"
+          MIN_SLEEP_SECONDS: "60"
+          MAX_SLEEP_SECONDS: "120"
+        run: python provision_e2_micro.py
