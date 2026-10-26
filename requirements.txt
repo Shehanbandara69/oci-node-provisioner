@@ -1,2 +1,2 @@
-oci
-python-dotenv
+oci>=2.160.0
+python-dotenv>=1.0.0
